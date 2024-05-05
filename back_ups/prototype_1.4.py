@@ -9,12 +9,16 @@
 
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem
+from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QFileDialog, QProgressBar
 
 from UNC_integration import *
+from xlsx_formating import *
+from progress import *
 
 import csv
 import pandas
+
+
 
 import os
 
@@ -152,11 +156,14 @@ class Ui_MainWindow(object):
 
         self.Tab2 = QtWidgets.QWidget()
         self.Tab2.setObjectName("Tab2")
+        self.label_15 = QtWidgets.QLabel(self.Tab2)
+        self.label_15.setGeometry(QtCore.QRect(40, 25, 400, 16))
+        self.label_15.setObjectName("label_15")
         self.comboBox_8 = QtWidgets.QComboBox(self.Tab2)
-        self.comboBox_8.setGeometry(QtCore.QRect(170, 50, 331, 31))
+        self.comboBox_8.setGeometry(QtCore.QRect(170, 70, 400, 31))
         self.comboBox_8.setObjectName("comboBox_8")
         self.label_10 = QtWidgets.QLabel(self.Tab2)
-        self.label_10.setGeometry(QtCore.QRect(40, 55, 151, 16))
+        self.label_10.setGeometry(QtCore.QRect(40, 75, 151, 16))
         self.label_10.setObjectName("label_10")
         self.pushButton_4 = QtWidgets.QPushButton(self.Tab2)
         self.pushButton_4.setGeometry(QtCore.QRect(650, 20, 331, 31))
@@ -206,6 +213,7 @@ class Ui_MainWindow(object):
         self.pushButton_3.setText(_translate("MainWindow", "Сохранить"))
         self.label_9.setText(_translate("MainWindow", "Формат сохранения"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.Tab1), _translate("MainWindow", "Запрос данных"))
+        self.label_15.setText(_translate("MainWindow", "Автоопределение формата: "))
         self.label_10.setText(_translate("MainWindow", "Тип графика"))
         self.pushButton_4.setText(_translate("MainWindow", "Построить"))
         self.pushButton_5.setText(_translate("MainWindow", "Сохранить"))
@@ -214,10 +222,14 @@ class Ui_MainWindow(object):
 
         self.connects()
 
+    #Активация кнопок
     def connects(self):
         self.pushButton.clicked.connect(self.get_data)
+        self.pushButton_3.clicked.connect(self.save_to)
+        self.pushButton_2.clicked.connect(self.load)
 
     def get_data(self):
+    
         print('Read widgets..')
         subscription_key = self.textEdit.toPlainText()
         reporterText = self.comboBox.currentText()
@@ -274,13 +286,18 @@ class Ui_MainWindow(object):
         #Проверяем Отчет или обычная выгрузка
         if self.comboBox_2.currentText() == 'Отчет по всем партнерам':
             print('Отчет по всем партнерам')
+            self.loading_bar = LoadingBar()
+            self.loading_bar.show()
+            self.loading_bar.start()
+
         else:
-            df_aistrade = get_request(request)
+            self.df_aistrade = get_request(request)
             #Вывести запросы
-            print(df_aistrade)
+            print(self.df_aistrade)
+            
 
             #Проверяем корректность запроса
-            if df_aistrade is None:
+            if self.df_aistrade is None:
                 print('ERROR: NO DATA')
                 msg = QMessageBox()
                 msg.setWindowTitle("Ошибка")
@@ -288,7 +305,7 @@ class Ui_MainWindow(object):
                 msg.setIcon(QMessageBox.Warning)
                 
                 msg.exec_()
-            elif df_aistrade.empty:
+            elif self.df_aistrade.empty:
                 print('ERROR: Empty')
                 msg = QMessageBox()
                 msg.setWindowTitle("Ошибка")
@@ -298,9 +315,42 @@ class Ui_MainWindow(object):
                 msg.exec_()
             else:
                 #Заполняем таблицу данными
-                df_aistrade = transformation_to_russian(df_aistrade)
-                self.frame_to_table(df_aistrade)
-                
+                self.df_aistrade = transformation_to_russian(self.df_aistrade)
+                self.frame_to_table(self.df_aistrade)
+
+                _translate = QtCore.QCoreApplication.translate
+                self.label_15.setText(_translate("MainWindow", "Автоопределение формата: Товарный отчет"))
+
+                self.get_actual_graphics()
+
+    #Сохранение     
+    def save_to(self):
+        file_path = QFileDialog.getSaveFileName(None, 'Сохранить файл', '', 'Файлы Excel (*.xlsx)')
+
+        print(file_path[0])
+        if file_path:
+            self.df_aistrade.to_excel(file_path[0], index= False)
+            # напечатать сообщение об успехе
+            print(f"DataFrame сохранен в {file_path}")
+            formating(file_path[0])
+    
+    #Функция кнопки загрузить
+    def load(self):
+        file_path = QFileDialog.getOpenFileName(None, "Открыть файл xlsx", "", "Файлы Excel (*.xlsx)")
+        self.df_aistrade = pd.read_excel(file_path[0])
+        self.frame_to_table(self.df_aistrade)
+
+        #Определение типа даты для посстроения графика
+        _translate = QtCore.QCoreApplication.translate
+
+        if str(self.df_aistrade.columns[0]) == 'Reporter':
+            self.label_15.setText(_translate("MainWindow", "Автоопределение формата: Отчет по странам"))
+        elif str(self.df_aistrade.columns[0])  == 'Тип (C/S)':
+            self.label_15.setText(_translate("MainWindow", "Автоопределение формата: Товарный отчет"))
+        else:
+            self.label_15.setText(_translate("MainWindow", "Автоопределение формата: Не определен"))
+
+        self.get_actual_graphics()
 
     #Отрисовывает в таблице на окне полученный data_frame
     def frame_to_table(self, df):
@@ -317,6 +367,25 @@ class Ui_MainWindow(object):
                 
         self.tableWidget.resizeColumnsToContents()
         self.tableWidget.show()
+    
+    #Функция отображения досупных графиков в зависимости от типа
+    def get_actual_graphics(self):
+        if (self.label_15.text() == 'Автоопределение формата: Отчет по странам'):
+            #Предложить графики по отчету по странам
+            self.comboBox_8.clear()
+            self.comboBox_8.addItem('Рейтинг крупнейших партнеров (1 год)')
+            self.comboBox_8.addItem('Рейтинг крупнейших партнеров (5 год)')
+            self.comboBox_8.addItem('Рейтинг крупнейших партнеров (10 лет)')
+            self.comboBox_8.addItem('Рейтинг крупнейших партнеров (MAX)')
+            
+        elif (self.label_15.text() == 'Автоопределение формата: Товарный отчет'):
+            #Предложить графики по товарному отчету
+            self.comboBox_8.clear()
+            self.comboBox_8.addItem('Рейтинг крупнейших сделок (6 разрдов GS)')
+            self.comboBox_8.addItem('Рейтинг крупнейших сделок (4 разряда GS)')
+            self.comboBox_8.addItem('Рейтинг крупнейших сделок (2 разряда GS)')
+
+
 
 
 #Возвращает ключ по значению из dict

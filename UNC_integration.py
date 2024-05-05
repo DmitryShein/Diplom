@@ -28,7 +28,7 @@ def transformation_to_russian(data):
 
     df = data.rename(columns={'typeCode': 'Тип (C/S)'})
     df = df.rename(columns={'freqCode': 'Тип периода'})
-    df = df.rename(columns={'refPeriodId': 'ID периода'})
+    df = df.drop('refPeriodId', axis = 1) 
     df = df.rename(columns={'refYear': 'Год'})
     df = df.rename(columns={'refMonth': 'Месяц (код)'})
     df = df.rename(columns={'period': 'Период'})
@@ -38,8 +38,9 @@ def transformation_to_russian(data):
     df = df.drop('flowDesc', axis = 1)
     df = df.drop('partnerDesc', axis = 1) 
     df = df.rename(columns={'flowCode': 'Торговый поток'})
-    df = df.rename(columns={'partnerCode': 'Код партнера'})
-    df = df.rename(columns={'partnerISO': 'ISO партнера'}) 
+    df = df.rename(columns={'partnerCode': 'ISO партнера'})
+    df = df.drop('partnerISO', axis = 1) 
+
     df = df.rename(columns={'partner2Code': 'Код 2го партнера '})
     df = df.drop('partner2ISO', axis = 1)
     df = df.drop('partner2Desc', axis = 1) 
@@ -80,13 +81,13 @@ def transformation_to_russian(data):
     df = df.rename(columns={'cifvalue': 'Стоимость по СФ, $'})
     df = df.drop('fobvalue', axis = 1)
     df = df.rename(columns={'primaryValue': 'Номинальная стоимость, $'})
-    df = df.rename(columns={'legacyEstimationFlag': 'Наследник'})
+    df = df.drop('legacyEstimationFlag', axis = 1)
     df = df.rename(columns={'isReported': 'Оповещения'})
     df = df.rename(columns={'isAggregate': 'Агрегация'})
     
 
     return df
 
-#Сейвим в эксель
+
 #df_aistrade.to_excel(r'C:\Users\Дмитрий\Documents\GitHub\Diplom\results\data.xlsx')
 
